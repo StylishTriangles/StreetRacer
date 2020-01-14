@@ -1,0 +1,19 @@
+{
+    "manufacturer": "McLaren",
+    "model": "F1",
+    "full_name": "McLaren F1",
+    "stats": {
+        "mass": 1062,
+        "_comment_power_samples": "power in PS, sampled uniformly every 1k RPM. The value for 0k RPM is just a placeholder ",
+        "power_samples": [0, 40, 120, 230, 330, 430, 520, 570, 540],
+        "_comment_torque_samples": "torque in Nm, sampled uniformly every 1k RPM. The value for 0k RPM is just a placeholder ",
+        "torque_samples": [200, 250, 400, 530, 580, 600, 600, 560, 480],
+        "sampling_precision": 1000,
+        "sampling_start": 0,
+        "min_rpm": 800,
+        "max_rpm": 8200,
+        "_comment_aerodynamics": "Below values are used to calculate vehicle's aerodynamics",
+        "drag_coefficient": 0.32,
+        "front_area": 1.79
+    }
+}
