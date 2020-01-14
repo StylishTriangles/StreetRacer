@@ -2,6 +2,7 @@
 import json
 import os
 import scipy.interpolate
+
 try:
     # Only used to show the power and torque interpolation
     import matplotlib.pyplot as plt
@@ -42,6 +43,7 @@ def rot_center(image, rect, angle):
     rot_rect = rot_image.get_rect(center=rect.center)
     return rot_image, rot_rect
 
+
 def load_config(name: str) -> dict:
     """
     Loads specified configuration file in JSON format, and converts it to a Python dict.
@@ -53,9 +55,10 @@ def load_config(name: str) -> dict:
         data = json.load(r)
     return data
 
+
 def interpolate_spline(x: list, y: list, newx: list) -> list:
     """Since scipy's spline is deprecated this is a function with a similar interface"""
-    f = scipy.interpolate.interp1d(x, y, kind='cubic', fill_value='extrapolate')
+    f = scipy.interpolate.interp1d(x, y, kind="cubic", fill_value="extrapolate")
     newy = f(newx)
     # plt.plot(x, y, 'o', newx, newy, '-')
     # plt.show()
@@ -75,16 +78,17 @@ class Player(pg.sprite.Sprite):
             configuration: dictionary with vehicle data such as name and stats
         """
         pg.sprite.Sprite.__init__(self, self.containers)
-        self.image           = self.images[0]
-        self.image_original  = self.images[0]
-        self.rect            = self.image.get_rect(midbottom=SCREENRECT.midbottom)
-        self.angle           = 0  # current sprite rotation in degrees
+        self.image = self.images[0]
+        self.image_original = self.images[0]
+        self.rect = self.image.get_rect(midbottom=SCREENRECT.midbottom)
+        self.angle = 0  # current sprite rotation in degrees
         self.posX, self.posY = self.rect.center
-        self.origtop         = self.rect.top
-        self.acceleration    = 0 # Way which car accelerates +1 = foreward, -1 = backward, 0 = no acceleration
-        self.velocity        = 0
-        self.engine_RPM      = 5000 # For now use constant RPM of the engine
-        self.mass            = configuration["stats"]["mass"]
+        self.origtop = self.rect.top
+        # Way in which car accelerates +1 = foreward, -1 = backward, 0 = no acceleration
+        self.acceleration = 0
+        self.velocity = 0
+        self.engine_RPM = 5000  # For now use constant RPM of the engine
+        self.mass = configuration["stats"]["mass"]
 
         # Below lists represent the interpolated values of engine power and torque every 1 RPM
         self.power_interpolation = []
@@ -93,19 +97,20 @@ class Player(pg.sprite.Sprite):
 
     def _interpolate_power_and_torque(self, configuration: dict):
         torque_data = configuration["stats"]["torque_samples"]
-        power_data  = configuration["stats"]["power_samples"]
+        power_data = configuration["stats"]["power_samples"]
         if len(torque_data) != len(power_data):
-            raise Exception(f"{configuration['full_name']} has incosistent amount of torque and power samples")
+            raise Exception(
+                f"{configuration['full_name']} has incosistent amount of torque and power samples"
+            )
         # Define range at which we will interpolate the data
-        start               = 0
-        end                 = configuration["stats"]["max_rpm"] + 1
-        sampling_start      = configuration["stats"]["sampling_start"]
-        sampling_precision  = configuration["stats"]["sampling_precision"]
+        start = 0
+        end = configuration["stats"]["max_rpm"] + 1
+        sampling_start = configuration["stats"]["sampling_start"]
+        sampling_precision = configuration["stats"]["sampling_precision"]
         # calculate the position of data on x axis (RPM axis)
-        samples_x = [sampling_precision*i + sampling_start for i in range(len(torque_data))]
+        samples_x = [sampling_precision * i + sampling_start for i in range(len(torque_data))]
         self.torque_interpolation = interpolate_spline(samples_x, torque_data, range(start, end))
-        self.power_interpolation  = interpolate_spline(samples_x, power_data, range(start, end))
-
+        self.power_interpolation = interpolate_spline(samples_x, power_data, range(start, end))
 
     def accelerate(self, direction):
         self.acceleration = direction
@@ -118,13 +123,16 @@ class Player(pg.sprite.Sprite):
         """
         self.angle += direction
         self.image, self.rect = rot_center(self.image_original, self.rect, self.angle)
-    
+
     def get_power(self):
         """ Returns the current power output from the engine """
         return self.power_interpolation[int(self.engine_RPM)]
-    
+
     def get_torque(self):
-        """ Returns the current power output from the engine """
+        """ 
+        Returns the current torque output from the engine 
+        (probably not the most scientific way to say this)
+        """
         return self.torque_interpolation[int(self.engine_RPM)]
 
     def update(self, deltaTime):
@@ -192,7 +200,7 @@ def main(winstyle=0, framerate=60):
     while True:
         t = pg.time.get_ticks()
         # deltaTime from last tick in seconds.
-        deltaTime = (t - ticksLastFrame) / 1000.0  #type: float
+        deltaTime = (t - ticksLastFrame) / 1000.0  # type: float
         ticksLastFrame = t
 
         # get input
@@ -220,6 +228,7 @@ def main(winstyle=0, framerate=60):
 
         # wait for next tick
         clock.tick(framerate)
+
 
 if __name__ == "__main__":
     main()
