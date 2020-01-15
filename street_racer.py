@@ -2,6 +2,7 @@
 import json
 import os
 import scipy.interpolate
+from math import cos, sin, degrees, radians, asin, pi
 
 try:
     # Only used to show the power and torque interpolation
@@ -17,6 +18,12 @@ SCREENRECT = Rect(0, 0, 1280, 720)
 
 # constant to convert Pferdestarke (PS) to kW
 PS_TO_KW = 0.73549875
+# air density in kg/m^3
+AIR_DENSITY = 1.225
+
+PIXELS_PER_METRE = 142 / 4.29
+
+EARTH_ACCELERATION = 9.81
 
 # see if we can load more than standard BMP
 if not pg.image.get_extended():
@@ -77,18 +84,27 @@ class Player(pg.sprite.Sprite):
         Args:
             configuration: dictionary with vehicle data such as name and stats
         """
+        # sprite configuration
         pg.sprite.Sprite.__init__(self, self.containers)
         self.image = self.images[0]
         self.image_original = self.images[0]
         self.rect = self.image.get_rect(midbottom=SCREENRECT.midbottom)
+        # player configuration
+        self.configuration = configuration
         self.angle = 0  # current sprite rotation in degrees
         self.posX, self.posY = self.rect.center
         self.origtop = self.rect.top
-        # Way in which car accelerates +1 = foreward, -1 = backward, 0 = no acceleration
+        # Way in which car accelerates +1 = forward, -1 = backward, 0 = no acceleration
         self.acceleration = 0
-        self.velocity = 0
+        # Way which driver wants to turn +1 = left, -1 = right, 0 = no steering
+        self.steering = 0
+        self.velocity = 0  # current velocity of the vehicle
+        self.min_RPM = configuration["stats"]["min_rpm"]
+        self.max_RPM = configuration["stats"]["max_rpm"]
         self.engine_RPM = 5000  # For now use constant RPM of the engine
         self.mass = configuration["stats"]["mass"]
+        self.gear = 1 # current gear
+        self.gears = configuration["transmission"]
 
         # Below lists represent the interpolated values of engine power and torque every 1 RPM
         self.power_interpolation = []
@@ -121,8 +137,9 @@ class Player(pg.sprite.Sprite):
         Args:
             direction: +1 turn counter-clockwise, -1 turn clockwise
         """
-        self.angle += direction
-        self.image, self.rect = rot_center(self.image_original, self.rect, self.angle)
+        self.steering = direction
+        # self.angle += direction
+        # self.image, self.rect = rot_center(self.image_original, self.rect, self.angle)
 
     def get_power(self):
         """ Returns the current power output from the engine """
@@ -135,16 +152,96 @@ class Player(pg.sprite.Sprite):
         """
         return self.torque_interpolation[int(self.engine_RPM)]
 
+    def update_rpm(self):
+        # wheel revolutions per second
+        revolutions = self.velocity / (2 * self.configuration["wheels"]["radius"] * pi)
+        engine_revolutions = revolutions * trans
+
     def update(self, deltaTime):
         # F = ma, F*s = P, W = P*t, M = r*F
+        fs = self.configuration["wheels"]["static_friction"]
+        if self.acceleration > 0 or self.velocity < 0:
+            r = self.configuration["wheels"]["radius"]
+            F = self.get_torque() / r  # force that pushes the car forward
+        else:
+            F = fs * self.mass * EARTH_ACCELERATION
 
-        # calculate the position delta
+        F *= self.acceleration
+
+        # calculate aerodynamic drag
+        SCd = (
+            self.configuration["stats"]["front_area"]
+            * self.configuration["stats"]["drag_coefficient"]
+        )
+        Fd = 0.5 * AIR_DENSITY * self.velocity ** 2 * SCd
+        F -= Fd  # F is now the net force exerted on vehicle
+        a = F / self.mass
+
+        self.velocity += a * deltaTime
+
+        self.posX += -sin(radians(self.angle)) * self.velocity * deltaTime * PIXELS_PER_METRE
+        self.posY += -cos(radians(self.angle)) * self.velocity * deltaTime * PIXELS_PER_METRE
+
+        if self.steering != 0:
+            # Calculate the maximum angle at which the car can turn without losing grip
+            wheelbase = self.configuration["geometry"]["wheelbase"]
+            max_friction = fs * self.mass * EARTH_ACCELERATION
+
+            # wheelbase/ R = sin(turningAngle)
+            # centrifugal force: Fc = mv^2/r
+            R = self.mass * self.velocity ** 2 / max_friction
+            max_turning_angle = self.configuration["wheels"]["max_turning_angle"]
+            turning_angle = 90  # no car can turn at 90 degrees
+            if R > wheelbase:
+                turning_angle = degrees(asin(wheelbase / R))
+                actualR = R
+            if turning_angle > max_turning_angle:
+                turning_angle = max_turning_angle
+                actualR = sin(radians(turning_angle)) * wheelbase
+            # omega = v / r
+            angular_velocity = self.velocity / actualR  # in radians
+            # print(self.velocity*3.6, turning_angle, max_friction)
+
+            self.angle += self.steering * degrees(angular_velocity) * deltaTime
+
+        # calculate the position delta in relation to players rectangle
         currX, currY = self.rect.center
         deltaX = int(self.posX - currX)
         deltaY = int(self.posY - currY)
         self.rect.move_ip(deltaX, deltaY)
-        pass
+        # rotate the rectangle to correct position
+        self.image, self.rect = rot_center(self.image_original, self.rect, self.angle)
 
+
+class Speedmeter(pg.sprite.Sprite):
+    """ 
+    To keep track of speed
+    """
+
+    def __init__(self, padding=3, position=(1180, 640), color="red"):
+        pg.sprite.Sprite.__init__(self)
+        self.font = pg.font.Font(None, 72)
+        # self.font.set_italic(1)
+        self.color = pg.Color(color)
+        self.lastspeed = -1
+        self.speed = 0
+        self.padding = padding
+        self.update()
+        self.rect = self.image.get_rect().move(position[0], position[1])
+
+    def set(self, speed):
+        self.speed = speed
+
+    def update(self, *args):
+        """
+        We only update the speed in update() when it has changed.
+        """
+        if self.speed != self.lastspeed:
+            self.lastspeed = self.speed
+            msg = str(self.speed)
+            pad = "0" * (self.padding-len(msg))
+            msg = pad + msg
+            self.image = self.font.render(msg, 0, self.color)
 
 def main(winstyle=0, framerate=60):
     """
@@ -155,7 +252,7 @@ def main(winstyle=0, framerate=60):
     """
     # Initialize pygame
     if pg.get_sdl_version()[0] == 2:
-        # needed for audio later on
+        # needed for audio later
         pg.mixer.pre_init(44100, 32, 2, 4096)
     pg.init()
 
@@ -170,7 +267,8 @@ def main(winstyle=0, framerate=60):
     pg.display.set_caption("Street Racer")
     pg.mouse.set_visible(0)
 
-    # Create the background, tile the background image
+    # Create the background
+    # leave it like this, in the future the background can be scrollable
     bgdtile = load_image("background.png")
     background = pg.Surface(SCREENRECT.size)
     for x in range(0, SCREENRECT.width, bgdtile.get_width()):
@@ -179,7 +277,7 @@ def main(winstyle=0, framerate=60):
     pg.display.flip()
 
     # Load images, assign to sprite classes
-    img = pg.transform.smoothscale(load_image("McLarenF1.png"), (80, 160))
+    img = pg.transform.smoothscale(load_image("McLarenF1.png"), (65, 142))
     Player.images = [img]
 
     # Initialize Game Groups
@@ -187,10 +285,13 @@ def main(winstyle=0, framerate=60):
 
     # Assign default groups to each sprite class
     Player.containers = all_groups
+    Speedmeter.containers = all_groups
 
     # Initialize the starting sprites
     mclaren_cfg = load_config("McLarenF1.json")
     player = Player(mclaren_cfg)
+    speed = Speedmeter()
+    all_groups.add(speed)
 
     ## Create Some Starting Values
     clock = pg.time.Clock()
@@ -215,12 +316,14 @@ def main(winstyle=0, framerate=60):
 
         # update all the sprites
         all_groups.update(deltaTime)
+        speed.set(int(player.velocity*3.6))
 
         # inform the car about current
         direction = keystate[K_UP] - keystate[K_DOWN]
         player.accelerate(direction)
         rotation = keystate[K_LEFT] - keystate[K_RIGHT]
         player.rotate(rotation)
+        # background.scroll(1, 1)
 
         # draw the scene
         dirty = all_groups.draw(screen)

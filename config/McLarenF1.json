@@ -10,10 +10,23 @@
         "torque_samples": [200, 250, 400, 530, 580, 600, 600, 560, 480],
         "sampling_precision": 1000,
         "sampling_start": 0,
+        "_comment_min_rpm": "The resting RPM",
         "min_rpm": 800,
         "max_rpm": 8200,
         "_comment_aerodynamics": "Below values are used to calculate vehicle's aerodynamics",
         "drag_coefficient": 0.32,
         "front_area": 1.79
-    }
+    },
+    "geometry": {
+        "wheelbase": 2.71
+    },
+    "wheels": {
+        "_comment_radius": "wheel radius in meters, F1 uses 17in wheels",
+        "radius": 0.2159,
+        "_comment_friction": "Friction on dry asphalt",
+        "static_friction": 1.0,
+        "sliding_friction": 0.75,
+        "max_turning_angle": 45
+    },
+    "transmission": [3.23, 2.19, 1.71, 1.39, 1.16, 0.93]
 }
