@@ -1,9 +1,13 @@
 import pygame as pg
 from typing import Tuple
 
+
 class Meter(pg.sprite.Sprite):
     """General purpose meter"""
-    def __init__(self, padding: int = 3, position: Tuple[int, int]=(1180, 640), color: str="red"):
+
+    def __init__(
+        self, padding: int = 3, position: Tuple[int, int] = (1180, 640), color: str = "red"
+    ):
         """
         Args:
             padding: padding of the displayed number, uses 0's for padding
@@ -34,6 +38,7 @@ class Meter(pg.sprite.Sprite):
             msg = self.format % self.data
             self.image = self.font.render(msg, 0, self.color)
 
+
 class Speedmeter(Meter):
     """ 
     To keep track of speed
@@ -41,7 +46,7 @@ class Speedmeter(Meter):
 
     def __init__(self, padding=3, position=(1180, 640), color="red"):
         Meter.__init__(self, padding, position, color)
-        self.format = "%0"+str(padding)+"dKPH"
+        self.format = "%0" + str(padding) + "dKPH"
 
     def set(self, speed: int):
         """Set the displayed speed"""
@@ -53,13 +58,15 @@ class Speedmeter(Meter):
         """
         Meter.update(self, *args)
 
+
 class Tachometer(Meter):
     """
     To keep track of RPM
     """
+
     def __init__(self, padding=4, position=(1180, 640), color="red"):
         Meter.__init__(self, padding, position, color)
-        self.format = "%0"+str(padding)+"dRPM"
+        self.format = "%0" + str(padding) + "dRPM"
 
     def set(self, rpm: int):
         """Set the displayed RPM"""
@@ -70,5 +77,3 @@ class Tachometer(Meter):
         Update the sprite image with current RPM
         """
         Meter.update(self, *args)
-
-      

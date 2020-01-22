@@ -10,13 +10,17 @@ PIXELS_PER_METRE = 71 / 4.29
 EARTH_ACCELERATION = 9.81
 SECONDS_IN_MINUTE = 60
 
+
 def rot_center(image: pg.Surface, rect: Rect, angle: float) -> Tuple[pg.Surface, Rect]:
     """Rotate an image while keeping its center"""
     rot_image = pg.transform.rotate(image, angle)
     rot_rect = rot_image.get_rect(center=rect.center)
     return rot_image, rot_rect
 
-def rotate(surface: pg.Surface, angle: float, pivot: tuple, offset: pg.math.Vector2) -> Tuple[pg.Surface, Rect]:
+
+def rotate(
+    surface: pg.Surface, angle: float, pivot: tuple, offset: pg.math.Vector2
+) -> Tuple[pg.Surface, Rect]:
     """
     Rotate the surface around the pivot point.
     Credit: @skrx StackOverflow
@@ -30,8 +34,9 @@ def rotate(surface: pg.Surface, angle: float, pivot: tuple, offset: pg.math.Vect
     rotated_image = pg.transform.rotozoom(surface, angle, 1)  # Rotate the image.
     rotated_offset = offset.rotate(-angle)  # Rotate the offset vector.
     # Add the offset vector to the center/pivot point to shift the rect.
-    rect = rotated_image.get_rect(center=pivot+rotated_offset)
+    rect = rotated_image.get_rect(center=pivot + rotated_offset)
     return rotated_image, rect  # Return the rotated image and shifted rect.
+
 
 def interpolate_spline(x: list, y: list, newx: list) -> list:
     """Since scipy's spline is deprecated this is a function with a similar interface"""
@@ -41,13 +46,15 @@ def interpolate_spline(x: list, y: list, newx: list) -> list:
     # plt.show()
     return newy
 
+
 def clamp(val, mini, maxi):
     """Returns value which is bound by range [min, max] inclusive"""
-    if (val < mini):
+    if val < mini:
         return mini
-    if (val > maxi):
+    if val > maxi:
         return maxi
     return val
+
 
 class Player(pg.sprite.Sprite):
     """
@@ -85,11 +92,11 @@ class Player(pg.sprite.Sprite):
         self.mass = configuration["stats"]["mass"]
         self.width = configuration["geometry"]["width"]
         self.length = configuration["geometry"]["length"]
-        self.gear = 1 # current gear
+        self.gear = 1  # current gear
         # transmission ratios, gear 0 has 0 (neutral)
         self.transmission = [100] + configuration["transmission"]
         self.transmission_base = configuration["transmission_base"]
-        self.shift_time = 0.0 # remaining shift time when shifting gears
+        self.shift_time = 0.0  # remaining shift time when shifting gears
         # Pymunk initialization
         # self.moment = pymunk.moment_for_box(self.mass, (self.width, self.length))
         # self.body = pymunk.Body(self.mass, self.moment)
@@ -154,12 +161,18 @@ class Player(pg.sprite.Sprite):
         Returns the current torque output from the engine 
         (probably not the most scientific way to say this)
         """
-        return self.torque_interpolation[int(self.engine_RPM)] * self.transmission[self.gear] * self.transmission_base
+        return (
+            self.torque_interpolation[int(self.engine_RPM)]
+            * self.transmission[self.gear]
+            * self.transmission_base
+        )
 
     def _update_rpm(self):
         # wheel revolutions per second
         revolutions = self.velocity / (2 * self.configuration["wheels"]["radius"] * pi)
-        engine_revolutions = revolutions * self.transmission[self.gear] * self.transmission_base * SECONDS_IN_MINUTE
+        engine_revolutions = (
+            revolutions * self.transmission[self.gear] * self.transmission_base * SECONDS_IN_MINUTE
+        )
         self.engine_RPM = clamp(engine_revolutions, self.min_RPM, self.max_RPM)
 
     def shift_gears(self, deltaTime: float):
@@ -170,10 +183,15 @@ class Player(pg.sprite.Sprite):
         """
         if self.is_shifting():
             self.shift_time -= deltaTime
-        elif self.engine_RPM >= self.max_RPM and self.gear < len(self.configuration["transmission"]):
-            self.gear+=1
+        elif self.engine_RPM >= self.max_RPM and self.gear < len(
+            self.configuration["transmission"]
+        ):
+            self.gear += 1
             self.shift_time = self.configuration["transmission_shift_time"]
-        elif self.engine_RPM < 0.9 * self.max_RPM * self.transmission[self.gear] / self.transmission[self.gear-1]:
+        elif (
+            self.engine_RPM
+            < 0.9 * self.max_RPM * self.transmission[self.gear] / self.transmission[self.gear - 1]
+        ):
             self.gear -= 1
             self.shift_time = self.configuration["transmission_shift_time"]
 

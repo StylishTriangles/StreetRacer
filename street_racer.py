@@ -51,8 +51,6 @@ def load_config(name: str) -> dict:
     return data
 
 
-  
-
 def main(winstyle=0, framerate=60):
     """
     Street drifter's entry point
@@ -132,7 +130,7 @@ def main(winstyle=0, framerate=60):
 
         # update all the sprites
         all_groups.update(deltaTime)
-        speed.set(int(player.velocity*3.6))
+        speed.set(int(player.velocity * 3.6))
         tachometer.set(int(player.engine_RPM))
 
         # inform the car about current
@@ -145,7 +143,7 @@ def main(winstyle=0, framerate=60):
         # bg_moved = True
         # if bg_moved:
         #     cameraOffset = cameraOffset[0] + 1, cameraOffset[1] + 1
-        #     screen.blit(bgdtile, cameraOffset)     
+        #     screen.blit(bgdtile, cameraOffset)
         #     pg.display.flip()
         dirty = all_groups.draw(screen)
         pg.display.update(dirty)
