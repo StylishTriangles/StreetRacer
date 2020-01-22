@@ -1,7 +1,7 @@
 # Street Racer
 ## About
 Welcome to this magnificient state-of-the-art game about racing!
-Enjoy this little track, where you can practice your drifts and burnouts.
+This is a very early release with not very much racing!
 ## Installing requirements
 `pip install -r requirements.txt`
 ## Running
