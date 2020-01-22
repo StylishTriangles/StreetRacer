@@ -7,6 +7,7 @@ from pygame.locals import *
 AIR_DENSITY = 1.225
 PIXELS_PER_METRE = 142 / 4.29
 EARTH_ACCELERATION = 9.81
+SECONDS_IN_MINUTE = 60
 
 def rot_center(image, rect, angle):
     """Rotate an image while keeping its center"""
@@ -21,6 +22,13 @@ def interpolate_spline(x: list, y: list, newx: list) -> list:
     # plt.plot(x, y, 'o', newx, newy, '-')
     # plt.show()
     return newy
+
+def clamp(val, mini, maxi):
+    if (val < mini):
+        return mini
+    if (val > maxi):
+        return maxi
+    return val
 
 class Player(pg.sprite.Sprite):
     """
@@ -55,7 +63,10 @@ class Player(pg.sprite.Sprite):
         self.engine_RPM = 5000  # For now use constant RPM of the engine
         self.mass = configuration["stats"]["mass"]
         self.gear = 1 # current gear
-        self.gears = configuration["transmission"]
+        # transmission ratios, gear 0 has 0 (neutral)
+        self.transmission = [100] + configuration["transmission"]
+        self.transmission_base = configuration["transmission_base"]
+        self.shift_time = 0.0 # remaining shift time when shifting gears
 
         # Below lists represent the interpolated values of engine power and torque every 1 RPM
         self.power_interpolation = []
@@ -101,12 +112,28 @@ class Player(pg.sprite.Sprite):
         Returns the current torque output from the engine 
         (probably not the most scientific way to say this)
         """
-        return self.torque_interpolation[int(self.engine_RPM)]
+        return self.torque_interpolation[int(self.engine_RPM)] * self.transmission[self.gear] * self.transmission_base
 
     def update_rpm(self):
         # wheel revolutions per second
         revolutions = self.velocity / (2 * self.configuration["wheels"]["radius"] * pi)
-        engine_revolutions = revolutions * trans
+        engine_revolutions = revolutions * self.transmission[self.gear] * self.transmission_base * SECONDS_IN_MINUTE
+        self.engine_RPM = clamp(engine_revolutions, self.min_RPM, self.max_RPM)
+
+    def shift_gears(self, deltaTime):
+        """Only shifts gears when necessary"""
+        if self.is_shifting():
+            self.shift_time -= deltaTime
+        elif self.engine_RPM >= self.max_RPM and self.gear < len(self.configuration["transmission"]):
+            self.gear+=1
+            self.shift_time = self.configuration["transmission_shift_time"]
+        elif self.engine_RPM < 0.9 * self.max_RPM * self.transmission[self.gear] / self.transmission[self.gear-1]:
+            self.gear -= 1
+            self.shift_time = self.configuration["transmission_shift_time"]
+
+    def is_shifting(self) -> bool:
+        """Returns True when player is shifting gears"""
+        return self.shift_time > 0
 
     def update(self, deltaTime):
         # F = ma, F*s = P, W = P*t, M = r*F
@@ -118,6 +145,8 @@ class Player(pg.sprite.Sprite):
             F = fs * self.mass * EARTH_ACCELERATION
 
         F *= self.acceleration
+        if self.is_shifting() and self.acceleration > 0:
+            F = 0
 
         # calculate aerodynamic drag
         SCd = (
@@ -129,6 +158,8 @@ class Player(pg.sprite.Sprite):
         a = F / self.mass
 
         self.velocity += a * deltaTime
+        self.update_rpm()
+        self.shift_gears(deltaTime)
 
         self.posX += -sin(radians(self.angle)) * self.velocity * deltaTime * PIXELS_PER_METRE
         self.posY += -cos(radians(self.angle)) * self.velocity * deltaTime * PIXELS_PER_METRE

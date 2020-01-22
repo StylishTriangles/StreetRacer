@@ -21,12 +21,15 @@
         "wheelbase": 2.71
     },
     "wheels": {
-        "_comment_radius": "wheel radius in meters, F1 uses 17in wheels",
-        "radius": 0.2159,
+        "_comment_radius": "wheel radius in meters, F1 uses 17in rims",
+        "radius": 0.3159,
         "_comment_friction": "Friction on dry asphalt",
         "static_friction": 1.0,
         "sliding_friction": 0.75,
         "max_turning_angle": 45
     },
-    "transmission": [3.23, 2.19, 1.71, 1.39, 1.16, 0.93]
+    "transmission": [3.23, 2.19, 1.71, 1.39, 1.16, 0.93],
+    "transmission_base": 2.56,
+    "transmission_shift_time": 0.4
+
 }
