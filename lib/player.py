@@ -1,19 +1,37 @@
 import scipy.interpolate
 from math import cos, sin, degrees, radians, asin, pi
+from typing import Tuple
 import pygame as pg
 from pygame.locals import *
 
 # air density in kg/m^3
 AIR_DENSITY = 1.225
-PIXELS_PER_METRE = 142 / 4.29
+PIXELS_PER_METRE = 71 / 4.29
 EARTH_ACCELERATION = 9.81
 SECONDS_IN_MINUTE = 60
 
-def rot_center(image, rect, angle):
+def rot_center(image: pg.Surface, rect: Rect, angle: float) -> Tuple[pg.Surface, Rect]:
     """Rotate an image while keeping its center"""
     rot_image = pg.transform.rotate(image, angle)
     rot_rect = rot_image.get_rect(center=rect.center)
     return rot_image, rot_rect
+
+def rotate(surface: pg.Surface, angle: float, pivot: tuple, offset: pg.math.Vector2) -> Tuple[pg.Surface, Rect]:
+    """
+    Rotate the surface around the pivot point.
+    Credit: @skrx StackOverflow
+
+    Args:
+        surface (pygame.Surface): The surface that is to be rotated.
+        angle (float): Rotate by this angle.
+        pivot (tuple, list, pygame.math.Vector2): The pivot point.
+        offset (pygame.math.Vector2): This vector is added to the pivot.
+    """
+    rotated_image = pg.transform.rotozoom(surface, angle, 1)  # Rotate the image.
+    rotated_offset = offset.rotate(-angle)  # Rotate the offset vector.
+    # Add the offset vector to the center/pivot point to shift the rect.
+    rect = rotated_image.get_rect(center=pivot+rotated_offset)
+    return rotated_image, rect  # Return the rotated image and shifted rect.
 
 def interpolate_spline(x: list, y: list, newx: list) -> list:
     """Since scipy's spline is deprecated this is a function with a similar interface"""
@@ -24,6 +42,7 @@ def interpolate_spline(x: list, y: list, newx: list) -> list:
     return newy
 
 def clamp(val, mini, maxi):
+    """Returns value which is bound by range [min, max] inclusive"""
     if (val < mini):
         return mini
     if (val > maxi):
@@ -41,7 +60,7 @@ class Player(pg.sprite.Sprite):
         """
         Args:
             configuration: dictionary with vehicle data such as name and stats
-            screenrect: Screen rectangle, used to place the car
+            screenrect: Screen rectangle, used to place the car initially
         """
         # sprite configuration
         pg.sprite.Sprite.__init__(self, self.containers)
@@ -51,22 +70,32 @@ class Player(pg.sprite.Sprite):
         # player configuration
         self.configuration = configuration
         self.angle = 0  # current sprite rotation in degrees
-        self.posX, self.posY = self.rect.center
+        self.posX = self.rect.center[0]
+        self.posY = self.rect.center[1]
         self.origtop = self.rect.top
         # Way in which car accelerates +1 = forward, -1 = backward, 0 = no acceleration
         self.acceleration = 0
         # Way which driver wants to turn +1 = left, -1 = right, 0 = no steering
         self.steering = 0
         self.velocity = 0  # current velocity of the vehicle
+        self.handbrake = 0
         self.min_RPM = configuration["stats"]["min_rpm"]
         self.max_RPM = configuration["stats"]["max_rpm"]
         self.engine_RPM = 5000  # For now use constant RPM of the engine
         self.mass = configuration["stats"]["mass"]
+        self.width = configuration["geometry"]["width"]
+        self.length = configuration["geometry"]["length"]
         self.gear = 1 # current gear
         # transmission ratios, gear 0 has 0 (neutral)
         self.transmission = [100] + configuration["transmission"]
         self.transmission_base = configuration["transmission_base"]
         self.shift_time = 0.0 # remaining shift time when shifting gears
+        # Pymunk initialization
+        # self.moment = pymunk.moment_for_box(self.mass, (self.width, self.length))
+        # self.body = pymunk.Body(self.mass, self.moment)
+        # self.shape = pymunk.Poly.create_box(self.body, (self.width, self.length), 0.1)
+        # self.shape.body.position = (self.posX, self.posY)
+        # print(self.moment)
 
         # Below lists represent the interpolated values of engine power and torque every 1 RPM
         self.power_interpolation = []
@@ -90,18 +119,31 @@ class Player(pg.sprite.Sprite):
         self.torque_interpolation = interpolate_spline(samples_x, torque_data, range(start, end))
         self.power_interpolation = interpolate_spline(samples_x, power_data, range(start, end))
 
-    def accelerate(self, direction):
+    def accelerate(self, direction: float):
+        """
+        Accelerate or deaccelerate the car
+        Args:
+            direction: value in range [-1, 1] describing the acceleration of the car, +1 is forward
+        """
         self.acceleration = direction
 
-    def rotate(self, direction):
+    def rotate(self, direction: float):
         """
-        Rotate the sprite
+        Rotate the sprite, 
         Args:
             direction: +1 turn counter-clockwise, -1 turn clockwise
         """
         self.steering = direction
         # self.angle += direction
         # self.image, self.rect = rot_center(self.image_original, self.rect, self.angle)
+
+    def handbrake(self, strength: float):
+        """
+        Apply the handbrake
+        Args:
+            strength: value in range [0, 1]
+        """
+        self.handbrake = strength
 
     def get_power(self):
         """ Returns the current power output from the engine """
@@ -114,14 +156,18 @@ class Player(pg.sprite.Sprite):
         """
         return self.torque_interpolation[int(self.engine_RPM)] * self.transmission[self.gear] * self.transmission_base
 
-    def update_rpm(self):
+    def _update_rpm(self):
         # wheel revolutions per second
         revolutions = self.velocity / (2 * self.configuration["wheels"]["radius"] * pi)
         engine_revolutions = revolutions * self.transmission[self.gear] * self.transmission_base * SECONDS_IN_MINUTE
         self.engine_RPM = clamp(engine_revolutions, self.min_RPM, self.max_RPM)
 
-    def shift_gears(self, deltaTime):
-        """Only shifts gears when necessary"""
+    def shift_gears(self, deltaTime: float):
+        """
+        Only shifts gears when necessary
+        Args:
+            deltaTime: time since last call to shift_gears()
+        """
         if self.is_shifting():
             self.shift_time -= deltaTime
         elif self.engine_RPM >= self.max_RPM and self.gear < len(self.configuration["transmission"]):
@@ -135,7 +181,12 @@ class Player(pg.sprite.Sprite):
         """Returns True when player is shifting gears"""
         return self.shift_time > 0
 
-    def update(self, deltaTime):
+    def update(self, deltaTime: float):
+        """
+        Updates the sprite's position, velocity, rotation, etc.
+        Args:
+            deltaTime: time since last call to update()
+        """
         # F = ma, F*s = P, W = P*t, M = r*F
         fs = self.configuration["wheels"]["static_friction"]
         if self.acceleration > 0 or self.velocity < 0:
@@ -158,7 +209,7 @@ class Player(pg.sprite.Sprite):
         a = F / self.mass
 
         self.velocity += a * deltaTime
-        self.update_rpm()
+        self._update_rpm()
         self.shift_gears(deltaTime)
 
         self.posX += -sin(radians(self.angle)) * self.velocity * deltaTime * PIXELS_PER_METRE

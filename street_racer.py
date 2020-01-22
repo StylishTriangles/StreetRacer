@@ -2,7 +2,8 @@
 import json
 import os
 
-from player import Player
+from lib import Player
+from lib import Speedmeter, Tachometer
 
 try:
     # Only used to show the power and torque interpolation
@@ -28,7 +29,7 @@ assets_dir = os.path.join(main_dir, "assets")
 config_dir = os.path.join(main_dir, "config")
 
 
-def load_image(file):
+def load_image(file) -> pg.Surface:
     """ loads an image, prepares it for play """
     file = os.path.join(assets_dir, file)
     try:
@@ -50,35 +51,7 @@ def load_config(name: str) -> dict:
     return data
 
 
-class Speedmeter(pg.sprite.Sprite):
-    """ 
-    To keep track of speed
-    """
-
-    def __init__(self, padding=3, position=(1180, 640), color="red"):
-        pg.sprite.Sprite.__init__(self)
-        self.font = pg.font.Font(None, 72)
-        # self.font.set_italic(1)
-        self.color = pg.Color(color)
-        self.lastspeed = -1
-        self.speed = 0
-        self.padding = padding
-        self.update()
-        self.rect = self.image.get_rect().move(position[0], position[1])
-
-    def set(self, speed):
-        self.speed = speed
-
-    def update(self, *args):
-        """
-        We only update the speed in update() when it has changed.
-        """
-        if self.speed != self.lastspeed:
-            self.lastspeed = self.speed
-            msg = str(self.speed)
-            pad = "0" * (self.padding-len(msg))
-            msg = pad + msg
-            self.image = self.font.render(msg, 0, self.color)
+  
 
 def main(winstyle=0, framerate=60):
     """
@@ -107,15 +80,16 @@ def main(winstyle=0, framerate=60):
 
     # Create the background
     # leave it like this, in the future the background can be scrollable
-    bgdtile = load_image("background.png")
+    bgdtile = pg.transform.smoothscale(load_image("background.png"), SCREENRECT.size)
     background = pg.Surface(SCREENRECT.size)
     for x in range(0, SCREENRECT.width, bgdtile.get_width()):
         background.blit(bgdtile, (x, 0))
-    screen.blit(background, (0, 0))
+    screen.blit(bgdtile, (0, 0))
     pg.display.flip()
+    bg_moved = False
 
     # Load images, assign to sprite classes
-    img = pg.transform.smoothscale(load_image("McLarenF1.png"), (65, 142))
+    img = pg.transform.smoothscale(load_image("McLarenF1.png"), (32, 71))
     Player.images = [img]
 
     # Initialize Game Groups
@@ -128,13 +102,16 @@ def main(winstyle=0, framerate=60):
     # Initialize the starting sprites
     mclaren_cfg = load_config("McLarenF1.json")
     player = Player(mclaren_cfg, SCREENRECT)
-    speed = Speedmeter()
+    speed = Speedmeter(position=(1080, 640))
     all_groups.add(speed)
+    tachometer = Tachometer(padding=4, position=(800, 640), color="blue")
+    all_groups.add(tachometer)
 
     ## Create Some Starting Values
     clock = pg.time.Clock()
     # set ticksLastFrame to -10ms to make sure math is not broken
     ticksLastFrame = pg.time.get_ticks() - 10
+    # cameraOffset = (0,0)
 
     while True:
         t = pg.time.get_ticks()
@@ -145,6 +122,7 @@ def main(winstyle=0, framerate=60):
         # get input
         for event in pg.event.get():
             if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
+                pg.quit()
                 return
 
         keystate = pg.key.get_pressed()
@@ -155,15 +133,20 @@ def main(winstyle=0, framerate=60):
         # update all the sprites
         all_groups.update(deltaTime)
         speed.set(int(player.velocity*3.6))
+        tachometer.set(int(player.engine_RPM))
 
         # inform the car about current
         direction = keystate[K_UP] - keystate[K_DOWN]
         player.accelerate(direction)
         rotation = keystate[K_LEFT] - keystate[K_RIGHT]
         player.rotate(rotation)
-        # background.scroll(1, 1)
 
         # draw the scene
+        # bg_moved = True
+        # if bg_moved:
+        #     cameraOffset = cameraOffset[0] + 1, cameraOffset[1] + 1
+        #     screen.blit(bgdtile, cameraOffset)     
+        #     pg.display.flip()
         dirty = all_groups.draw(screen)
         pg.display.update(dirty)
 

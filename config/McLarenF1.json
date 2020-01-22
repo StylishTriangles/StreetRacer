@@ -18,7 +18,11 @@
         "front_area": 1.79
     },
     "geometry": {
-        "wheelbase": 2.71
+        "wheelbase": 2.71,
+        "width": 1.82,
+        "length": 4.287,
+        "front_wheels_offset": 1,
+        "rear_wheels_offset": -1.47
     },
     "wheels": {
         "_comment_radius": "wheel radius in meters, F1 uses 17in rims",
